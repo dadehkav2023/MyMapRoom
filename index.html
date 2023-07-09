@@ -1,0 +1,385 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div>
+      <!-- 
+        -set up the iframe with the map service's src address
+        -the fullscreen attribute must be set to true for the map's fullscreen button to work
+        -you can set up your own cutom styles to get the right map dimension inside your application
+      -->
+      <iframe
+        id="example-id"
+        class="example-class"
+        src="http://localhost:3001"
+        title="map"
+        width="88%"
+        height="80%"
+        allowfullscreen="true"
+      ></iframe>
+      <div class="buttons-holder">
+        <button id="polygon-info-btn" class="btn">send polygon info</button>
+        <button id="multi-polygon-info-btn" class="btn">
+          send multi-polygon info
+        </button>
+        <button id="edit-id-btn" class="btn">send edit id</button>
+        <button id="marker-info-btn" class="btn">send marker info</button>
+        <button id="multi-markers-btn" class="btn">send markers</button>
+        <button id="toggle-polygon-btn" class="btn">toggle polygon draw</button>
+        <button id="toggle-tiles-btn" class="btn">toggle map tiles</button>
+        <button id="map-options-btn" class="btn">send map settings</button>
+        <button id="center-zoom-btn" class="btn">current center & zoom</button>
+      </div>
+    </div>
+    <div class="data-display-holder">
+      <div class="display" style="padding: 1px">
+        <p style="font-weight: bold; text-align: center">Sent Data:</p>
+
+        <p id="sent-data"></p>
+
+        <p id="sent-polygon-data"></p>
+      </div>
+      <div class="display" style="padding: 1px">
+        <p style="font-weight: bold">Received Data:</p>
+
+        <p id="retrieved-data"></p>
+
+        <p id="polygon-data"></p>
+      </div>
+    </div>
+  </body>
+
+  <script>
+    /*the iframeElement will be used to get access to the postMessage function which will allow you to send data to the map*/
+    const iframeElement = document.getElementById("example-id"); //
+    const iframeSrcAddress = "http://localhost:3001";
+    /*for displaying the sent & received data in the DOM*/
+    const sentDataDisplay = document.getElementById("sent-data");
+    const sentPolygonDataDisplay = document.getElementById("sent-polygon-data");
+
+    /*------------------------------------- MOCK MESSAGE DATA-------------------------------------*/
+
+    const singlePolygonData = {
+      type: "single-polygon-info",
+      isEditable: false,
+      singlePolygonCoords: [
+        { lat: 36.78272235332714, lng: 53.221324682235725 },
+        { lat: 36.782902803032684, lng: 53.22094917297364 },
+        { lat: 36.782939322564246, lng: 53.220798969268806 },
+        { lat: 36.78146563823745, lng: 53.22062194347382 },
+        { lat: 36.78140978375516, lng: 53.221845030784614 },
+        { lat: 36.78201988435556, lng: 53.22186917066575 },
+        { lat: 36.782636424746585, lng: 53.221920132637024 },
+      ],
+    };
+
+    const multiPolygonsData = {
+      type: "multi-polygons-info",
+      polygonsData: [
+        {
+          polygonCoords: [
+            { lat: 36.78159023655124, lng: 53.22075068950654 },
+            { lat: 36.78201558788943, lng: 53.220798969268806 },
+            { lat: 36.78209292424276, lng: 53.22148025035859 },
+            { lat: 36.78145274874516, lng: 53.22137832641602 },
+            { lat: 36.78148712071979, lng: 53.22070240974426 },
+          ],
+          polygonId: 1,
+          color: "red",
+          opacity: 0.1,
+        },
+        {
+          polygonCoords: [
+            { lat: 36.78216596406033, lng: 53.22150707244874 },
+            { lat: 36.78215737114422, lng: 53.22075605392457 },
+            { lat: 36.78275457652001, lng: 53.220809698104866 },
+            { lat: 36.78263857296227, lng: 53.221555352211006 },
+          ],
+          polygonId: 2,
+          color: "green",
+          opacity: 0.1,
+        },
+      ],
+    };
+
+    const editPolygonData = {
+      type: "edited-polygon-id",
+      editedPolygonID: 1,
+    };
+
+    const drawPolygonActivationData = (value) => {
+      return {
+        type: "draw-polygon-activation",
+        isDrawPolygonActive: value,
+      };
+    };
+
+    const singleMarkerData = {
+      type: "single-marker",
+      marker: { lat: 36.78209399117737, lng: 53.22126624098161 },
+    };
+
+    const multiMarkersData = {
+      type: "markers-info",
+      markersData: [
+        {
+          latitude: 36.78176274107574,
+          longitude: 53.22110771696538,
+          modalBody: "modal popup 1",
+        },
+        {
+          latitude: 36.78243054467981,
+          longitude: 53.22114260901464,
+          modalBody: "modal popup 2",
+          color: "limegreen",
+        },
+      ],
+    };
+
+    const mapAttributesData = {
+      type: "map-attributes",
+      center: { lat: 36.78209399117737, lng: 53.22126624098161 },
+      zoom: 18,
+    };
+
+    const getCurrentCenterZoomData = {
+      type: "get-current-center-zoom",
+      getCurrentCenterAndZoom: true,
+    };
+
+    const hideMapTilesData = (isHide) => {
+      return {
+        type: "hide-map-tiles",
+        isHideMapTiles: isHide,
+      };
+    };
+
+    const mapSettingsData = {
+      type: "map-options",
+      options: {
+        attributes: {
+          canZoom: true,
+        },
+        tools: {
+          tiles: true,
+          currentCoords: true,
+          measureTool: true,
+          breakpoints: false,
+          drawPolyline: false,
+          drawPolygon: false,
+          dragControl: true,
+        },
+        editControl: true,
+        tileLayer: true,
+        buttons: {
+          fullScreen: true,
+          zoom: true,
+        },
+        theme: {
+          markerColor: "red",
+        },
+        mapLocked: false,
+      },
+    };
+
+    /*
+    -use the postMessage function of the iframeElement to send a variety of data to the map
+    -note that if you would like your data to be sent to the map when the page has finished loading
+     you must use the postMessage function inside the callback function of the window object's "load" event:
+
+          window.addEventListener("load", function () {
+            iframeElement.contentWindow.postMessage(
+               { type: "example-message-type", exampleData1: [], exampleData2: false },
+               "https://servicemap.mymaproom.ir/"
+            );
+          });
+    */
+    /*-------------------------send single polygon info example-------------------------*/
+    const polygonInfoButton = document.getElementById("polygon-info-btn");
+
+    function handleSendPolygonInfo() {
+      iframeElement.contentWindow.postMessage(
+        singlePolygonData,
+        iframeSrcAddress
+      );
+
+      iframeElement.contentWindow.postMessage(
+        mapAttributesData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(mapAttributesData);
+      sentPolygonDataDisplay.innerHTML = JSON.stringify(singlePolygonData);
+    }
+
+    polygonInfoButton.addEventListener("click", handleSendPolygonInfo);
+    /*----------------------------------------------------------------------------------*/
+
+    /*-------------------------send multi polygon info example-------------------------*/
+    const multiPolygonInfoButton = document.getElementById(
+      "multi-polygon-info-btn"
+    );
+
+    function handleSendMultiPolygonInfo() {
+      sendEditIdButton.style.display = "block";
+      iframeElement.contentWindow.postMessage(
+        multiPolygonsData,
+        iframeSrcAddress
+      );
+
+      iframeElement.contentWindow.postMessage(
+        mapAttributesData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(mapAttributesData);
+      sentPolygonDataDisplay.innerHTML = JSON.stringify(multiPolygonsData);
+    }
+
+    multiPolygonInfoButton.addEventListener(
+      "click",
+      handleSendMultiPolygonInfo
+    );
+    /*---------------------------------------------------------------------------*/
+
+    /*---------------------------send polygon edit id---------------------------*/
+    const sendEditIdButton = document.getElementById("edit-id-btn");
+    sendEditIdButton.style.display = "none";
+
+    function handleSendEditId() {
+      iframeElement.contentWindow.postMessage(
+        editPolygonData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(editPolygonData);
+    }
+    sendEditIdButton.addEventListener("click", handleSendEditId);
+    /*----------------------------------------------------------------------------*/
+
+    /*----------------------send single marker info example----------------------*/
+    const markerInfoButton = document.getElementById("marker-info-btn");
+
+    function handleSendMarkerInfo() {
+      iframeElement.contentWindow.postMessage(
+        singleMarkerData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(singleMarkerData);
+    }
+
+    markerInfoButton.addEventListener("click", handleSendMarkerInfo);
+    /*---------------------------------------------------------------------------*/
+
+    /*-----------------------send multiple markes example-----------------------*/
+    const multiMarkersButton = document.getElementById("multi-markers-btn");
+
+    function handleMultiMarkersInfo() {
+      iframeElement.contentWindow.postMessage(
+        multiMarkersData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(multiMarkersData);
+    }
+
+    multiMarkersButton.addEventListener("click", handleMultiMarkersInfo);
+    /*---------------------------------------------------------------------------*/
+
+    /*-------------------------toggle polygon draw button-------------------*/
+    const togglePolygonButton = document.getElementById("toggle-polygon-btn");
+    let isMapOptionsSet = false;
+
+    if (!isMapOptionsSet) {
+      togglePolygonButton.style.display = "none";
+    }
+
+    let hidePolygonButton = false;
+
+    function handleTogglePolygonButton() {
+      hidePolygonButton = !hidePolygonButton;
+      iframeElement.contentWindow.postMessage(
+        drawPolygonActivationData(hidePolygonButton),
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(
+        drawPolygonActivationData(hidePolygonButton)
+      );
+    }
+    togglePolygonButton.addEventListener("click", handleTogglePolygonButton);
+    /*---------------------------------------------------------------------------*/
+
+    /*--------------------------toggle map tiles visibility----------------------*/
+    const toggleTilesButton = document.getElementById("toggle-tiles-btn");
+
+    let hideTile = false;
+    function handleToggleTiles() {
+      hideTile = !hideTile;
+      iframeElement.contentWindow.postMessage(
+        hideMapTilesData(hideTile),
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(hideMapTilesData(hideTile));
+    }
+    toggleTilesButton.addEventListener("click", handleToggleTiles);
+    /*---------------------------------------------------------------------------*/
+
+    /*--------------------------toggle map tiles visibility----------------------*/
+    const currentCenterZoomButton = document.getElementById("center-zoom-btn");
+
+    function handleGetCenterZoom() {
+      iframeElement.contentWindow.postMessage(
+        getCurrentCenterZoomData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(getCurrentCenterZoomData);
+    }
+    currentCenterZoomButton.addEventListener("click", handleGetCenterZoom);
+    /*---------------------------------------------------------------------------*/
+
+    /*---------------------------send map setting options-----------------------*/
+    const mapOptionsButton = document.getElementById("map-options-btn");
+
+    function handleMapOptions() {
+      togglePolygonButton.style.display = "block";
+
+      iframeElement.contentWindow.postMessage(
+        mapSettingsData,
+        iframeSrcAddress
+      );
+
+      sentDataDisplay.innerHTML = JSON.stringify(mapSettingsData);
+    }
+
+    mapOptionsButton.addEventListener("click", handleMapOptions);
+    /*---------------------------------------------------------------------------*/
+
+    /*---------------------listen for incoming data from the map-----------------*/
+    /*you can get access to the data being sent from the map by using the "message" event from the window object*/
+    window.addEventListener("message", (e) => {
+      /*the data  will be available inside the event's "data" property*/
+      const retrievedData = e.data;
+
+      const retrievedDataDisplay = document.getElementById("retrieved-data");
+      const retrievedPolygonDataDisplay =
+        document.getElementById("polygon-data");
+
+      /*by checking the value of the "type" property inside the data object, you can determine what actions to take with the received data*/
+      if (
+        retrievedData.type !== "polygon-drawn" &&
+        retrievedData.type !== "polygon-edited" &&
+        retrievedData.type !== "polygon-dragged"
+      ) {
+        retrievedDataDisplay.innerHTML = JSON.stringify(retrievedData);
+      } else {
+        retrievedPolygonDataDisplay.innerHTML = JSON.stringify(retrievedData);
+      }
+    });
+    /*-------------------------------------------------------------------------*/
+  </script>
+</html>
